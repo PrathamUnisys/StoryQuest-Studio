@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 5%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 7%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 6%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 38 92% 50%;
+    --primary-foreground: 222 47% 5%;
+    --secondary: 217 33% 15%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 12%;
+    --muted-foreground: 215 20% 62%;
+    --accent: 160 84% 39%;
+    --accent-foreground: 222 47% 5%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 18%;
+    --input: 217 33% 16%;
+    --ring: 38 92% 50%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 55% at 18% -10%, rgba(245, 158, 11, 0.08), transparent 60%),
+      radial-gradient(ellipse 65% 50% at 92% 8%, rgba(16, 185, 129, 0.06), transparent 65%),
+      linear-gradient(180deg, #070a12 0%, #0b0f19 55%, #080b13 100%);
+    background-attachment: fixed;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background: rgba(245, 158, 11, 0.28);
+    color: #fde68a;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.22);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.45);
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-white/5 bg-white/[0.025] backdrop-blur-sm;
+  }
+
+  .panel-raised {
+    @apply rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.055] to-white/[0.02] shadow-[0_18px_60px_-35px_rgba(0,0,0,0.9)];
+  }
+
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent;
+  }
+
+  .focus-ring {
+    @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
+  }
+}

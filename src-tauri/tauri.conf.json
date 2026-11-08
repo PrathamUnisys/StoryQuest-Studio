@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "StoryQuest Studio",
+  "version": "1.0.0",
+  "identifier": "com.storyquest.studio",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "StoryQuest Studio — Every episode is a quest. Every finished story is an achievement.",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "center": true,
+        "backgroundColor": "#0B0F19"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' https://api.openai.com https://api.anthropic.com https://openrouter.ai http://127.0.0.1:11434 https://www.googleapis.com https://youtubeanalytics.googleapis.com https://oauth2.googleapis.com; img-src 'self' asset: data: blob: https://i.ytimg.com https://yt3.ggpht.com; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "publisher": "StoryQuest Studio",
+    "category": "Productivity",
+    "shortDescription": "Gamified AI-Powered Animated Storytelling Production Manager",
+    "longDescription": "StoryQuest Studio helps solo animators and creators consistently finish animated YouTube episodes using RPG quests, focus sessions, AI production planning, and reliable Windows reminders.",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "startMenuFolder": "StoryQuest Studio"
+      },
+      "wix": {
+        "language": "en-US"
+      }
+    }
+  },
+  "plugins": {
+    "autostart": null
+  }
+}
