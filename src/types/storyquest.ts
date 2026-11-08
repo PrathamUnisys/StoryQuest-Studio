@@ -213,8 +213,15 @@ export interface ActivityDay {
 export interface YoutubeStatus {
   connected: boolean;
   channelTitle: string | null;
+  channelId: string | null;
   lastSyncAt: string | null;
   note: string;
+  hasClientCredentials: boolean;
+}
+
+export interface YoutubeClientCredentialsInput {
+  clientId: string;
+  clientSecret: string;
 }
 
 export interface ReminderConfig {

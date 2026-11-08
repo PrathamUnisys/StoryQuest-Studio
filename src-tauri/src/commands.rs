@@ -59,6 +59,7 @@ fn allowed_setting_keys() -> &'static [&'static str] {
         "youtube_last_sync_at",
         "youtube_connection_status",
         "youtube_channel_title",
+        "youtube_channel_id",
         "xp_reward_small",
         "xp_reward_medium",
         "xp_reward_difficult",
@@ -476,18 +477,28 @@ fn query_youtube_status(conn: &Connection) -> Result<YoutubeStatus, String> {
         )
         .optional()
         .map_err(|e| e.to_string())?;
+    let channel_id: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'youtube_channel_id'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
 
     let connected = status.as_deref() == Some("connected");
     Ok(YoutubeStatus {
         connected,
         channel_title: channel_title.filter(|v| !v.trim().is_empty()),
+        channel_id: channel_id.filter(|v| !v.trim().is_empty()),
         last_sync_at: last_sync.filter(|v| !v.trim().is_empty()),
         note: if connected {
             "Connected with the official YouTube APIs.".to_string()
         } else {
-            "Not connected. Channel analytics arrive in Milestone 4; no estimates are shown."
+            "Not connected. Add your Google OAuth Client ID/Secret, then connect; no estimates are shown."
                 .to_string()
         },
+        has_client_credentials: crate::youtube::has_client_credentials(),
     })
 }
 
@@ -971,6 +982,230 @@ pub fn cmd_backup_database(state: State<'_, AppState>) -> Result<String, String>
     let backup_dir = state.app_dir.join("Backups");
     let path = create_database_backup(&state.db_path, &backup_dir)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+// ---------------------------------------------------------------------------
+// M4: YouTube OAuth + sync (tokens in Windows Credential Manager only)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubeClientCredentialsInput {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
+#[tauri::command]
+pub fn cmd_youtube_set_client_credentials(input: YoutubeClientCredentialsInput) -> Result<(), String> {
+    crate::youtube::set_client_credentials(&input.client_id, &input.client_secret)
+}
+
+#[tauri::command]
+pub fn cmd_youtube_has_client_credentials() -> bool {
+    crate::youtube::has_client_credentials()
+}
+
+fn open_browser_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        // rundll32 FileProtocolHandler takes the URL as a single argv entry,
+        // avoiding cmd.exe splitting on '&' which truncated Google's auth URL
+        // (missing response_type -> invalid_request).
+        std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
+            .spawn()
+            .map_err(|e| format!("Could not open browser: {e}"))?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_youtube_connect(app: AppHandle, login_hint: Option<String>) -> Result<YoutubeStatus, String> {
+    use tauri::Manager;
+    let (client_id, _secret) = crate::youtube::get_client_credentials()?;
+    let code_verifier = crate::youtube::generate_code_verifier();
+    let code_challenge = crate::youtube::pkce_challenge(&code_verifier);
+    let state_token = crate::youtube::generate_state();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("Could not start local OAuth listener: {e}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| e.to_string())?
+        .port();
+    let redirect_uri = format!("http://127.0.0.1:{port}");
+    let hint = login_hint
+        .as_deref()
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .map(|h| h.to_string())
+        .or_else(crate::youtube::env_login_hint);
+    let auth_url = crate::youtube::build_auth_url_with_hint(
+        &client_id,
+        &redirect_uri,
+        &code_challenge,
+        &state_token,
+        hint.as_deref(),
+    );
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+    }
+    open_browser_url(&auth_url)?;
+
+    let code = timeout_loopback(&listener, &state_token).await?;
+    let tokens = crate::youtube::exchange_code(&code, &code_verifier, &redirect_uri).await?;
+    if tokens.scope.contains("youtube.readonly") == false {
+        crate::youtube::clear_tokens();
+        return Err("Granted scopes did not include YouTube access; reconnect and approve all requested scopes".to_string());
+    }
+    let state = app.state::<AppState>();
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE settings SET value = 'connected' WHERE key = 'youtube_connection_status'",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    query_youtube_status(&conn)
+}
+
+async fn timeout_loopback(listener: &tokio::net::TcpListener, expected_state: &str) -> Result<String, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let accepted = tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept())
+        .await
+        .map_err(|_| "Timed out waiting for Google sign-in (5 min). Try connecting again.".to_string())?
+        .map_err(|e| format!("OAuth listener error: {e}"))?;
+    let (mut socket, _) = accepted;
+    let mut buf = [0u8; 8192];
+    let n = socket.read(&mut buf).await.map_err(|e| e.to_string())?;
+    let request = String::from_utf8_lossy(&buf[..n]);
+    let path = request
+        .lines()
+        .next()
+        .and_then(|l| l.split_whitespace().nth(1))
+        .unwrap_or("/");
+    let mut code: Option<String> = None;
+    let mut error: Option<String> = None;
+    let mut state_ok = false;
+    if let Some(q) = path.split('?').nth(1) {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                let vv = urlencoding::decode(v).unwrap_or_default().to_string();
+                if k == "code" {
+                    code = Some(vv);
+                } else if k == "error" {
+                    error = Some(vv);
+                } else if k == "state" && vv == expected_state {
+                    state_ok = true;
+                }
+            }
+        }
+    }
+    let (status, body) = if code.is_some() && state_ok {
+        ("HTTP/1.1 200 OK", "YouTube connected. You can return to StoryQuest Studio.")
+    } else {
+        ("HTTP/1.1 400 Bad Request", "Sign-in did not complete. Return to StoryQuest Studio and try again.")
+    };
+    let response = format!("{status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+    let _ = socket.write_all(response.as_bytes()).await;
+    if let Some(e) = error {
+        return Err(format!("Google sign-in error: {e}"));
+    }
+    code.ok_or_else(|| "No authorization code received from Google".to_string())
+}
+
+#[tauri::command]
+pub async fn cmd_youtube_sync_now(state: State<'_, AppState>) -> Result<YoutubeStatus, String> {
+    let access_token = crate::youtube::ensure_access_token().await?;
+    let channel = crate::youtube::fetch_channel_stats(&access_token).await?;
+    let analytics = crate::youtube::fetch_analytics(&access_token).await?;
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO youtube_channel_snapshots (id, user_id, channel_id, channel_title, subscriber_count, hidden_subscriber_count, view_count, video_count, synced_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        rusqlite::params![
+            uuid::Uuid::new_v4().to_string(),
+            DEFAULT_USER_ID,
+            channel.channel_id,
+            channel.title,
+            channel.subscriber_count,
+            if channel.hidden_subscriber_count { 1 } else { 0 },
+            channel.view_count,
+            channel.video_count,
+            now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO youtube_analytics_snapshots (id, user_id, period_start, period_end, views, estimated_minutes_watched, subscribers_gained, subscribers_lost, synced_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        rusqlite::params![
+            uuid::Uuid::new_v4().to_string(),
+            DEFAULT_USER_ID,
+            analytics.period_start,
+            analytics.period_end,
+            analytics.views,
+            analytics.estimated_minutes_watched,
+            analytics.subscribers_gained,
+            analytics.subscribers_lost,
+            now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE creator_progress SET published_videos_total = ?1, subscriber_count = ?2, total_channel_views = ?3, total_watch_minutes = ?4, last_recalculated_at = ?5, updated_at = ?5 WHERE user_id = ?6",
+        rusqlite::params![
+            channel.video_count as i32,
+            channel.subscriber_count,
+            channel.view_count,
+            analytics.estimated_minutes_watched,
+            now,
+            DEFAULT_USER_ID,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE settings SET value = ?1 WHERE key = 'youtube_channel_title'",
+        rusqlite::params![channel.title],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE settings SET value = ?1 WHERE key = 'youtube_channel_id'",
+        rusqlite::params![channel.channel_id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE settings SET value = ?1 WHERE key = 'youtube_last_sync_at'",
+        rusqlite::params![now],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE settings SET value = 'connected' WHERE key = 'youtube_connection_status'",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    let _ = crate::gamification::recalculate_creator_progress(&conn, DEFAULT_USER_ID);
+    let unlocks = evaluate_achievements(&conn, DEFAULT_USER_ID, AchievementNotificationMode::Individual)?;
+    let _ = record_achievement_notifications(&conn, DEFAULT_USER_ID, &unlocks, AchievementNotificationMode::Individual);
+    query_youtube_status(&conn)
+}
+
+#[tauri::command]
+pub fn cmd_youtube_disconnect(state: State<'_, AppState>) -> Result<YoutubeStatus, String> {
+    crate::youtube::clear_tokens();
+    crate::credentials::delete_api_key("youtube_oauth_client_id")?;
+    crate::credentials::delete_api_key("youtube_oauth_client_secret")?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE settings SET value = 'not_connected' WHERE key = 'youtube_connection_status'",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    query_youtube_status(&conn)
 }
 
 // ---------------------------------------------------------------------------

@@ -2,16 +2,16 @@
 
 Single source of truth for "where we are." Updated after every work session.
 
-## Current state (M3 — Gamification detail)
-**Status:** Implemented; verification passed. Awaiting user acceptance review before M4.
+## Current state (M4 — YouTube integration)
+**Status:** Implemented; verification passed. Awaiting user acceptance + live OAuth credentials to connect.
 
-Live database `StoryQuestProjects/storyquest.db` is at migration `005_gamification_notifications`.
+Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sync`.
 - User: `Solo Creator`, Level 1, 0 XP, 0 streak (fabricated Aria Vance data reset).
 - Creator ranks: 13, thresholds 0/1/3/5/10/15/25/40/60/100/150/250/500 published videos.
 - Achievements: 24 seeded, all locked until conditions are met. Auto-unlock engine active.
 - CHARACTER_CREATOR fixed: `progress_available = 0` (manual achievement).
 - Tasks: 15 in sample campaign `camp_01`; 1 available, 14 locked.
-- YouTube: `not_connected` (M4; no Google OAuth credentials yet).
+- YouTube: `not_connected`. M4 code done: OAuth PKCE+loopback, Data API + Analytics sync, migration 006 snapshots, `.env` (`GOOGLE_YOUTUBE_CLIENT_ID/SECRET`) + Credential Manager fallback. Needs user's real Desktop OAuth credentials to go live.
 - AI planner: deterministic template only (M6).
 
 ## Completed — M1 foundation
@@ -50,11 +50,22 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `005_gamificati
 - [x] Frontend: Settings streak prefs (rest day, vacation mode, vacation until)
 - [x] M3 Rust tests: first-task unlock, multi-user keys, hidden achievement, 3-day gap reset, 2-day freeze consume, rest-day exclusion, notification persist/ack, backfill idempotency, reopened task progress
 
-## In progress
-- [ ] User acceptance review (M3)
+## Completed — M4 YouTube integration
+- [x] OAuth 2.0 Desktop PKCE + loopback `127.0.0.1:0`, `select_account` + `login_hint` (.env `GOOGLE_YOUTUBE_LOGIN_HINT`)
+- [x] `.env` secrets (dotenvy) + Credential Manager token storage, never SQLite
+- [x] Migration `006_youtube_sync`: channel + analytics snapshots; sync updates `creator_progress` → achievement engine
+- [x] Data API `channels.list?mine=true` + Analytics `reports.query` 28d (views/watch/subs gained/lost)
+- [x] Frontend: credentials form, Connect/Disconnect/Sync, metrics dashboard
+- [x] Live DB migrated to `006_youtube_sync`; live OAuth needs test-user add + Connect + Sync in app (not yet connected in DB)
 
-## Next — M4 (after acceptance)
-- [ ] Google OAuth 2.0, YouTube Data/Analytics sync, channel dashboard (needs OAuth credentials)
+## In progress
+- [ ] M4 live acceptance: Connect `createcreate313@gmail.com` (Test user) + Sync now in app
+
+## Accepted
+- [x] User acceptance review (M3) — 2026-11-09
+
+## Next
+- [ ] M4 live acceptance, then M5
 
 ## Later — M5–M7
 - [ ] M5: Windows Task Scheduler wiring, reminder CRUD, quiet hours enforcement
@@ -69,4 +80,6 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `005_gamificati
 | 2026-11-09 | `npm run typecheck` | pass |
 | 2026-11-09 | `npm run build` | pass |
 | 2026-11-09 | `cargo check` | pass |
+| 2026-11-09 | `cargo test` (M4) | 24/24 pass (5 new YouTube tests) |
+| 2026-11-09 | Live DB migration to 006 | verified: `006_youtube_sync`, youtube settings keys present, 0 snapshots (not yet connected) |
 | 2026-11-09 | Live DB migration to 005 | verified: notification table, CHARACTER_CREATOR fix |

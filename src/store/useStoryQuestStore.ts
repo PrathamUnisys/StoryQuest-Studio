@@ -52,6 +52,10 @@ interface StoryQuestState {
   fetchNotifications: () => Promise<void>;
   acknowledgeNotifications: (input: AcknowledgeNotificationsInput) => Promise<void>;
   setStreakPrefs: (input: SetStreakPrefsInput) => Promise<void>;
+  youtubeSetClientCredentials: (clientId: string, clientSecret: string) => Promise<void>;
+  youtubeConnect: (loginHint?: string) => Promise<void>;
+  youtubeSyncNow: () => Promise<void>;
+  youtubeDisconnect: () => Promise<void>;
 }
 
 function messageFrom(error: unknown): string {
@@ -353,6 +357,51 @@ export const useStoryQuestStore = create<StoryQuestState>((set, get) => ({
         saving: false,
         notice: { kind: "error", message: messageFrom(error) },
       });
+    }
+  },
+
+  youtubeSetClientCredentials: async (clientId, clientSecret) => {
+    set({ saving: true, notice: null });
+    try {
+      await api.youtubeSetClientCredentials({ clientId, clientSecret });
+      await get().loadBootstrap();
+      set({ saving: false, notice: { kind: "success", message: "Google OAuth credentials saved." } });
+    } catch (error) {
+      set({ saving: false, notice: { kind: "error", message: messageFrom(error) } });
+    }
+  },
+
+  youtubeConnect: async (loginHint) => {
+    set({ saving: true, notice: null });
+    try {
+      await api.youtubeConnect(loginHint);
+      await get().loadBootstrap();
+      set({ saving: false, notice: { kind: "success", message: "YouTube connected. Run Sync now to fetch channel stats." } });
+    } catch (error) {
+      set({ saving: false, notice: { kind: "error", message: messageFrom(error) } });
+    }
+  },
+
+  youtubeSyncNow: async () => {
+    set({ saving: true, notice: null });
+    try {
+      await api.youtubeSyncNow();
+      await get().loadBootstrap();
+      await get().fetchNotifications();
+      set({ saving: false, notice: { kind: "success", message: "YouTube channel synced." } });
+    } catch (error) {
+      set({ saving: false, notice: { kind: "error", message: messageFrom(error) } });
+    }
+  },
+
+  youtubeDisconnect: async () => {
+    set({ saving: true, notice: null });
+    try {
+      await api.youtubeDisconnect();
+      await get().loadBootstrap();
+      set({ saving: false, notice: { kind: "success", message: "YouTube disconnected." } });
+    } catch (error) {
+      set({ saving: false, notice: { kind: "error", message: messageFrom(error) } });
     }
   },
 }));

@@ -296,8 +296,10 @@ pub struct TaskCounts {
 pub struct YoutubeStatus {
     pub connected: bool,
     pub channel_title: Option<String>,
+    pub channel_id: Option<String>,
     pub last_sync_at: Option<String>,
     pub note: String,
+    pub has_client_credentials: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

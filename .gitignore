@@ -6,6 +6,7 @@ src-tauri/gen/schemas/
 *.pdb
 .env
 .env.*
+!.env.example
 *.db-shm
 *.db-wal
 *.db-journal

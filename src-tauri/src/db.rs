@@ -31,6 +31,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: "005_gamification_notifications",
         sql: include_str!("../migrations/005_achievement_notifications.sql"),
     },
+    Migration {
+        version: "006_youtube_sync",
+        sql: include_str!("../migrations/006_youtube_sync.sql"),
+    },
 ];
 
 fn is_memory(path: &Path) -> bool {

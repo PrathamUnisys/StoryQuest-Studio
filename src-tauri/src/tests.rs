@@ -168,17 +168,17 @@ mod tests {
         let db_path = temp_dir.path().join("storyquest.db");
 
         let conn = init_database(&db_path).unwrap();
-        assert_eq!(schema_version(&conn).unwrap(), "005_gamification_notifications");
+        assert_eq!(schema_version(&conn).unwrap(), "006_youtube_sync");
         assert!(pending_migrations(&conn).unwrap().is_empty());
         drop(conn);
 
         let conn = init_database(&db_path).unwrap();
-        assert_eq!(schema_version(&conn).unwrap(), "005_gamification_notifications");
+        assert_eq!(schema_version(&conn).unwrap(), "006_youtube_sync");
         assert!(pending_migrations(&conn).unwrap().is_empty());
         let applied: i32 = conn
             .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(applied, 5);
+        assert_eq!(applied, 6);
     }
 
     #[test]

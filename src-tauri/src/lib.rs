@@ -9,6 +9,7 @@ pub mod project_fs;
 pub mod scheduler;
 pub mod tray;
 pub mod windows_task_scheduler;
+pub mod youtube;
 #[cfg(test)]
 mod tests;
 
@@ -58,6 +59,7 @@ fn migrate_only(args: &[String]) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = dotenvy::dotenv();
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|arg| arg == "--migrate-only") {
@@ -191,6 +193,11 @@ pub fn run() {
             cmd_set_streak_prefs,
             cmd_trigger_test_toast,
             cmd_backup_database,
+            cmd_youtube_set_client_credentials,
+            cmd_youtube_has_client_credentials,
+            cmd_youtube_connect,
+            cmd_youtube_sync_now,
+            cmd_youtube_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running StoryQuest Studio Tauri application");

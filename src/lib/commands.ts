@@ -24,6 +24,8 @@ import type {
   UpdateCampaignInput,
   UpdateEpisodeInput,
   UserProfile,
+  YoutubeClientCredentialsInput,
+  YoutubeStatus,
 } from "../types/storyquest";
 import { isTauriRuntime } from "./tauriBridge";
 
@@ -102,4 +104,12 @@ export const api = {
     call<boolean>("cmd_acknowledge_achievement_notification", input),
   setStreakPrefs: (input: SetStreakPrefsInput) =>
     call<StreakRecord>("cmd_set_streak_prefs", input),
+  youtubeSetClientCredentials: (input: YoutubeClientCredentialsInput) =>
+    call<void>("cmd_youtube_set_client_credentials", input),
+  youtubeHasClientCredentials: () =>
+    call<boolean>("cmd_youtube_has_client_credentials"),
+  youtubeConnect: (loginHint?: string) =>
+    call<YoutubeStatus>("cmd_youtube_connect", loginHint ? { loginHint } : {}),
+  youtubeSyncNow: () => call<YoutubeStatus>("cmd_youtube_sync_now"),
+  youtubeDisconnect: () => call<YoutubeStatus>("cmd_youtube_disconnect"),
 };
