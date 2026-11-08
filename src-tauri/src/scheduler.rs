@@ -1,5 +1,69 @@
 use chrono::{Local, NaiveTime};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
+
+pub fn quiet_hours_settings(conn: &Connection) -> (bool, String, String) {
+    let get = |key: &str, default: &str| -> String {
+        conn.query_row("SELECT value FROM settings WHERE key = ?1", params![key], |row| {
+            row.get::<_, String>(0)
+        })
+        .optional()
+        .ok()
+        .flatten()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| default.to_string())
+    };
+    let enabled = get("quiet_hours_enabled", "true") == "true";
+    let start = get("quiet_hours_start", "22:30");
+    let end = get("quiet_hours_end", "07:30");
+    (enabled, start, end)
+}
+
+pub fn is_suppressed_by_quiet_hours(conn: &Connection, now_time: NaiveTime) -> bool {
+    let (enabled, start, end) = quiet_hours_settings(conn);
+    enabled && is_within_quiet_hours(now_time, &start, &end)
+}
+
+pub fn is_snoozed(snoozed_until: Option<&str>, now: chrono::DateTime<Local>) -> bool {
+    match snoozed_until {
+        None => false,
+        Some(s) => {
+            let s = s.trim();
+            if s.is_empty() {
+                return false;
+            }
+            // Stored as "YYYY-MM-DD HH:MM:SS" (local) or RFC3339.
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+                return now < dt.with_timezone(&Local);
+            }
+            if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+                return now.naive_local() < ndt;
+            }
+            false
+        }
+    }
+}
+
+pub fn log_notification_history(
+    conn: &Connection,
+    reminder_id: Option<&str>,
+    title: &str,
+    body: &str,
+    delivery_status: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO notification_history (id, reminder_id, title, body, delivery_status)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            format!("notif_{}", uuid::Uuid::new_v4()),
+            reminder_id,
+            title,
+            body,
+            delivery_status
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 pub const APP_AUMID: &str = "com.storyquest.studio";
 

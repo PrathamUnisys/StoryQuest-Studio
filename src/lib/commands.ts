@@ -24,6 +24,8 @@ import type {
   UpdateCampaignInput,
   UpdateEpisodeInput,
   UserProfile,
+  CreateReminderInput,
+  UpdateReminderInput,
   YoutubeClientCredentialsInput,
   YoutubeStatus,
 } from "../types/storyquest";
@@ -112,4 +114,14 @@ export const api = {
     call<YoutubeStatus>("cmd_youtube_connect", loginHint ? { loginHint } : {}),
   youtubeSyncNow: () => call<YoutubeStatus>("cmd_youtube_sync_now"),
   youtubeDisconnect: () => call<YoutubeStatus>("cmd_youtube_disconnect"),
+  createReminder: (input: CreateReminderInput) =>
+    call<ReminderConfig>("cmd_create_reminder", input),
+  updateReminder: (input: UpdateReminderInput) =>
+    call<ReminderConfig>("cmd_update_reminder", input),
+  setReminderEnabled: (reminderId: string, enabled: boolean) =>
+    call<ReminderConfig>("cmd_set_reminder_enabled", { reminderId, enabled }),
+  deleteReminder: (reminderId: string) =>
+    call<void>("cmd_delete_reminder", { reminderId }),
+  snoozeReminder: (reminderId: string, minutes: number) =>
+    call<ReminderConfig>("cmd_snooze_reminder", { reminderId, minutes }),
 };

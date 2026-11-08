@@ -16,6 +16,8 @@ mod tests;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use rusqlite::OptionalExtension;
+
 use commands::*;
 use tauri::{Manager, WindowEvent};
 
@@ -37,6 +39,74 @@ fn data_dir_from_env() -> Option<PathBuf> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from)
+}
+
+fn fire_reminder_from_args(reminder_id: &str) -> Result<(), String> {
+    let data_dir = std::env::var("STORYQUEST_DATA_DIR")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("StoryQuestProjects")
+        });
+    // App DB (GUI data dir) takes precedence when it exists.
+    let app_db = std::env::var("LOCALAPPDATA")
+        .ok()
+        .map(|base| std::path::PathBuf::from(base).join("com.storyquest.studio").join("storyquest.db"))
+        .filter(|p| p.exists());
+    let db_path = app_db.unwrap_or_else(|| data_dir.join("storyquest.db"));
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| e.to_string())?;
+    if reminder_id.is_empty() {
+        return scheduler::dispatch_windows_toast(
+            "Scheduled StoryQuest Reminder",
+            "Your daily animation quest is ready to start.",
+            25,
+            25,
+        );
+    }
+    let reminder: Option<(String, String, bool, Option<String>)> = conn
+        .query_row(
+            "SELECT title, reminder_type, enabled, snoozed_until FROM reminders WHERE id = ?1",
+            rusqlite::params![reminder_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, i32>(2)? != 0, row.get(3)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let (title, _kind, enabled, snoozed_until) = match reminder {
+        Some(r) => r,
+        None => return Ok(()),
+    };
+    if !enabled {
+        return Ok(());
+    }
+    if scheduler::is_snoozed(snoozed_until.as_deref(), chrono::Local::now()) {
+        return Ok(());
+    }
+    if scheduler::is_suppressed_by_quiet_hours(&conn, chrono::Local::now().time()) {
+        let _ = scheduler::log_notification_history(
+            &conn,
+            Some(reminder_id),
+            &title,
+            "Suppressed by quiet hours",
+            "quiet_hours_suppressed",
+        );
+        return Ok(());
+    }
+    scheduler::dispatch_windows_toast(&title, "Your scheduled StoryQuest reminder is ready.", 25, 25)?;
+    let _ = conn.execute(
+        "UPDATE reminders SET last_triggered_at = datetime('now') WHERE id = ?1",
+        rusqlite::params![reminder_id],
+    );
+    let _ = scheduler::log_notification_history(
+        &conn,
+        Some(reminder_id),
+        &title,
+        "Delivered via scheduled task",
+        "delivered",
+    );
+    Ok(())
 }
 
 fn migrate_only(args: &[String]) -> Result<(), String> {
@@ -78,12 +148,12 @@ pub fn run() {
                 let _ = w.set_focus();
             }
             if argv.iter().any(|arg| arg == "--reminder-mode") {
-                let _ = scheduler::dispatch_windows_toast(
-                    "Scheduled StoryQuest Reminder",
-                    "Your daily animation quest is ready to start.",
-                    25,
-                    25,
-                );
+                let reminder_id = argv
+                    .iter()
+                    .position(|a| a == "--reminder-id")
+                    .and_then(|i| argv.get(i + 1).cloned())
+                    .unwrap_or_default();
+                let _ = fire_reminder_from_args(&reminder_id);
             }
         }))
         .plugin(tauri_plugin_autostart::init(
@@ -198,6 +268,11 @@ pub fn run() {
             cmd_youtube_connect,
             cmd_youtube_sync_now,
             cmd_youtube_disconnect,
+            cmd_create_reminder,
+            cmd_update_reminder,
+            cmd_set_reminder_enabled,
+            cmd_delete_reminder,
+            cmd_snooze_reminder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running StoryQuest Studio Tauri application");

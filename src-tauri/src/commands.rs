@@ -867,6 +867,237 @@ pub fn cmd_list_reminders(state: State<'_, AppState>) -> Result<Vec<ReminderConf
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
+fn validate_reminder_input(
+    title: &str,
+    reminder_type: &str,
+    schedule_time: &str,
+    days_of_week_json: &str,
+    specific_date: Option<&str>,
+) -> Result<(), String> {
+    if title.trim().is_empty() {
+        return Err("Reminder title is required".to_string());
+    }
+    if !["daily", "weekly", "specific_date", "task_deadline", "custom", "weekly_review"].contains(&reminder_type) {
+        return Err(format!("Unknown reminder type: {reminder_type}"));
+    }
+    chrono::NaiveTime::parse_from_str(schedule_time.trim(), "%H:%M")
+        .map_err(|_| format!("scheduleTime must be HH:MM, got {schedule_time}"))?;
+    let days: Vec<i32> = serde_json::from_str(days_of_week_json)
+        .map_err(|_| "daysOfWeek must be a JSON array of 0-6".to_string())?;
+    for d in &days {
+        if !(0..=6).contains(d) {
+            return Err(format!("daysOfWeek values must be 0-6, got {d}"));
+        }
+    }
+    if reminder_type == "specific_date" {
+        let date = specific_date.unwrap_or("").trim();
+        if date.is_empty() {
+            return Err("specificDate is required for specific_date reminders".to_string());
+        }
+        chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            .map_err(|_| format!("specificDate must be YYYY-MM-DD, got {date}"))?;
+    }
+    Ok(())
+}
+
+fn reminder_from_row(row: &rusqlite::Row) -> Result<ReminderConfig, rusqlite::Error> {
+    Ok(ReminderConfig {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        reminder_type: row.get(2)?,
+        task_id: row.get(3)?,
+        schedule_time: row.get(4)?,
+        days_of_week_json: row.get(5)?,
+        specific_date: row.get(6)?,
+        enabled: row.get::<_, i32>(7)? != 0,
+        snoozed_until: row.get(8)?,
+        windows_task_name: row.get(9)?,
+        last_triggered_at: row.get(10)?,
+    })
+}
+
+fn load_reminder(conn: &Connection, reminder_id: &str) -> Result<ReminderConfig, String> {
+    conn.query_row(
+        "SELECT id, title, reminder_type, task_id, schedule_time, days_of_week_json,
+                specific_date, enabled, snoozed_until, windows_task_name, last_triggered_at
+         FROM reminders WHERE id = ?1",
+        params![reminder_id],
+        reminder_from_row,
+    )
+    .optional()
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| format!("Reminder {reminder_id} not found"))
+}
+
+fn sync_reminder_task(conn: &Connection, reminder: &ReminderConfig) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    crate::windows_task_scheduler::sync_windows_scheduled_task(&exe.to_string_lossy(), reminder)?;
+    let _ = (conn, reminder);
+    Ok(())
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateReminderInput {
+    pub title: String,
+    pub reminder_type: String,
+    pub task_id: Option<String>,
+    pub schedule_time: String,
+    pub days_of_week: Vec<i32>,
+    pub specific_date: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateReminderInput {
+    pub id: String,
+    pub title: String,
+    pub reminder_type: String,
+    pub task_id: Option<String>,
+    pub schedule_time: String,
+    pub days_of_week: Vec<i32>,
+    pub specific_date: Option<String>,
+    pub enabled: bool,
+}
+
+#[tauri::command]
+pub fn cmd_create_reminder(
+    state: State<'_, AppState>,
+    input: CreateReminderInput,
+) -> Result<ReminderConfig, String> {
+    let days_json = serde_json::to_string(&input.days_of_week).map_err(|e| e.to_string())?;
+    validate_reminder_input(
+        &input.title,
+        &input.reminder_type,
+        &input.schedule_time,
+        &days_json,
+        input.specific_date.as_deref(),
+    )?;
+    if let Some(task_id) = &input.task_id {
+        let conn = state.db.lock().map_err(|e| e.to_string())?;
+        let exists: Option<String> = conn
+            .query_row("SELECT id FROM tasks WHERE id = ?1", params![task_id], |row| row.get(0))
+            .optional()
+            .map_err(|e| e.to_string())?;
+        if exists.is_none() {
+            return Err(format!("Task {task_id} not found"));
+        }
+    }
+    let id = format!("rem_{}", uuid::Uuid::new_v4().simple());
+    let windows_task_name = format!("Reminder_{}", &id[4..12.min(id.len())]);
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO reminders (id, title, reminder_type, task_id, schedule_time, days_of_week_json,
+                specific_date, enabled, windows_task_name)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8)",
+        params![
+            id,
+            input.title.trim(),
+            input.reminder_type,
+            input.task_id,
+            input.schedule_time.trim(),
+            days_json,
+            input.specific_date,
+            windows_task_name,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    let reminder = load_reminder(&conn, &id)?;
+    sync_reminder_task(&conn, &reminder)?;
+    Ok(reminder)
+}
+
+#[tauri::command]
+pub fn cmd_update_reminder(
+    state: State<'_, AppState>,
+    input: UpdateReminderInput,
+) -> Result<ReminderConfig, String> {
+    let days_json = serde_json::to_string(&input.days_of_week).map_err(|e| e.to_string())?;
+    validate_reminder_input(
+        &input.title,
+        &input.reminder_type,
+        &input.schedule_time,
+        &days_json,
+        input.specific_date.as_deref(),
+    )?;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let existing = load_reminder(&conn, &input.id)?;
+    conn.execute(
+        "UPDATE reminders SET title = ?1, reminder_type = ?2, task_id = ?3, schedule_time = ?4,
+                days_of_week_json = ?5, specific_date = ?6, enabled = ?7
+         WHERE id = ?8",
+        params![
+            input.title.trim(),
+            input.reminder_type,
+            input.task_id,
+            input.schedule_time.trim(),
+            days_json,
+            input.specific_date,
+            if input.enabled { 1 } else { 0 },
+            input.id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    let updated = load_reminder(&conn, &existing.id)?;
+    sync_reminder_task(&conn, &updated)?;
+    Ok(updated)
+}
+
+#[tauri::command]
+pub fn cmd_set_reminder_enabled(
+    state: State<'_, AppState>,
+    reminder_id: String,
+    enabled: bool,
+) -> Result<ReminderConfig, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE reminders SET enabled = ?1 WHERE id = ?2",
+        params![if enabled { 1 } else { 0 }, reminder_id],
+    )
+    .map_err(|e| e.to_string())?;
+    let reminder = load_reminder(&conn, &reminder_id)?;
+    sync_reminder_task(&conn, &reminder)?;
+    Ok(reminder)
+}
+
+#[tauri::command]
+pub fn cmd_delete_reminder(state: State<'_, AppState>, reminder_id: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let reminder = load_reminder(&conn, &reminder_id)?;
+    conn.execute("DELETE FROM reminders WHERE id = ?1", params![reminder_id])
+        .map_err(|e| e.to_string())?;
+    crate::windows_task_scheduler::remove_windows_scheduled_task(&reminder.windows_task_name)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cmd_snooze_reminder(
+    state: State<'_, AppState>,
+    reminder_id: String,
+    minutes: i32,
+) -> Result<ReminderConfig, String> {
+    if !(5..=720).contains(&minutes) {
+        return Err("Snooze minutes must be between 5 and 720".to_string());
+    }
+    let until = (Local::now() + chrono::Duration::minutes(minutes as i64))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE reminders SET snoozed_until = ?1 WHERE id = ?2",
+        params![until, reminder_id],
+    )
+    .map_err(|e| e.to_string())?;
+    crate::scheduler::log_notification_history(
+        &conn,
+        Some(&reminder_id),
+        "Reminder snoozed",
+        &format!("Snoozed for {minutes} minutes until {until}"),
+        "snoozed",
+    )?;
+    load_reminder(&conn, &reminder_id)
+}
+
 #[tauri::command]
 pub fn cmd_apply_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
@@ -969,11 +1200,23 @@ pub fn cmd_remove_api_key(credential_key_name: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn cmd_trigger_test_toast(
+    state: State<'_, AppState>,
     quest_title: String,
     short_description: String,
     estimated_mins: i32,
     xp_reward: i32,
 ) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    if crate::scheduler::is_suppressed_by_quiet_hours(&conn, Local::now().time()) {
+        crate::scheduler::log_notification_history(
+            &conn,
+            None,
+            &quest_title,
+            &short_description,
+            "quiet_hours_suppressed",
+        )?;
+        return Err("Suppressed by quiet hours (logged to notification history)".to_string());
+    }
     dispatch_windows_toast(&quest_title, &short_description, estimated_mins, xp_reward)
 }
 

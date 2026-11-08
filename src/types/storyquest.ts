@@ -224,6 +224,20 @@ export interface YoutubeClientCredentialsInput {
   clientSecret: string;
 }
 
+export interface CreateReminderInput {
+  title: string;
+  reminderType: string;
+  taskId: string | null;
+  scheduleTime: string;
+  daysOfWeek: number[];
+  specificDate: string | null;
+}
+
+export interface UpdateReminderInput extends CreateReminderInput {
+  id: string;
+  enabled: boolean;
+}
+
 export interface ReminderConfig {
   id: string;
   title: string;

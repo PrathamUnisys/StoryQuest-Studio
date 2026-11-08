@@ -323,7 +323,7 @@ export function SettingsScreen() {
             <CardHeader>
               <CardTitle>Quiet hours</CardTitle>
               <CardDescription>
-                Stored now. Reminder suppression is wired up in Milestone 5.
+                Active: reminders fired inside this window are suppressed and logged to notification history.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -540,7 +540,7 @@ export function SettingsScreen() {
               <Limitation text="Daily quest generator, focus timer, and XP completion flow — Milestone 2." />
               <Limitation text="Campaign and episode creation, asset library, roadmap editing — Milestone 2." />
               <Limitation text="YouTube OAuth, channel analytics, publications — Milestone 4." />
-              <Limitation text="Reminder engine, quiet hours, scheduled tasks — Milestone 5." />
+              <Limitation text="AI provider settings and roadmap generation — Milestone 6." />
               <Limitation text="AI planner, MCP dispatch, and skill tree remain in the codebase but are not in the main navigation yet." />
             </CardContent>
           </Card>

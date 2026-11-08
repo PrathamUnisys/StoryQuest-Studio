@@ -11,7 +11,7 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sy
 - Achievements: 24 seeded, all locked until conditions are met. Auto-unlock engine active.
 - CHARACTER_CREATOR fixed: `progress_available = 0` (manual achievement).
 - Tasks: 15 in sample campaign `camp_01`; 1 available, 14 locked.
-- YouTube: `not_connected`. M4 code done: OAuth PKCE+loopback, Data API + Analytics sync, migration 006 snapshots, `.env` (`GOOGLE_YOUTUBE_CLIENT_ID/SECRET`) + Credential Manager fallback. Needs user's real Desktop OAuth credentials to go live.
+- YouTube: `connected` (live, accepted 2026-11-09). OAuth PKCE+loopback, Data API + Analytics sync, migration 006 snapshots, `.env` (`GOOGLE_YOUTUBE_CLIENT_ID/SECRET`, `GOOGLE_YOUTUBE_LOGIN_HINT`) + Credential Manager tokens.
 - AI planner: deterministic template only (M6).
 
 ## Completed — M1 foundation
@@ -58,17 +58,25 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sy
 - [x] Frontend: credentials form, Connect/Disconnect/Sync, metrics dashboard
 - [x] Live DB migrated to `006_youtube_sync`; live OAuth needs test-user add + Connect + Sync in app (not yet connected in DB)
 
+## Completed — M5 reminders + scheduler + quiet hours
+- [x] Reminder CRUD (`create/update/delete/enable/snooze 5-720m`) + validation, each mutation syncs its `StoryQuestStudio\…` schtasks entry (delete removes it)
+- [x] schtasks fixes: weekly `/D` from `days_of_week_json` (empty = `*`), specific_date `/SC ONCE /SD <date>`; pure `build_schtasks_args` + 5 unit tests
+- [x] Quiet-hours enforcement in test-toast + `--reminder-mode` fire path; suppressed = `notification_history (quiet_hours_suppressed)` row
+- [x] `--reminder-mode --reminder-id` loads the real reminder (enabled/snooze/quiet checks, `last_triggered_at`, `delivered` history row)
+- [x] Calendar screen CRUD UI (types, time, weekly day picker, date, enable, snooze 30m, delete); Settings quiet-hours = active
+- [x] Manual verify: `schtasks /Create /SC WEEKLY /D MON,WED,FRI` created + queried + deleted `StoryQuestStudio\M5Test`
+
 ## In progress
-- [ ] M4 live acceptance: Connect `createcreate313@gmail.com` (Test user) + Sync now in app
+- [ ] M5 live acceptance: create a reminder in Calendar, confirm `schtasks /Query` shows it, fire test toast
 
 ## Accepted
 - [x] User acceptance review (M3) — 2026-11-09
+- [x] M4 live YouTube sync — 2026-11-09: connected `createcreate313@gmail.com`, channel "Fantasy HR" (`UCXaZOMvGe_9So3su9yes04g`), 2 videos, 217 views, 0 subs; 28d analytics: 3 views, 0 watch min. Verified in app DB `%LOCALAPPDATA%\com.storyquest.studio\storyquest.db` (GUI app data dir; project `StoryQuestProjects/` DB is migrate-only and stays `not_connected`).
 
 ## Next
-- [ ] M4 live acceptance, then M5
+- [ ] M5 live acceptance, then M6 (AI provider + roadmap)
 
-## Later — M5–M7
-- [ ] M5: Windows Task Scheduler wiring, reminder CRUD, quiet hours enforcement
+## Later — M6–M7
 - [ ] M6: AI provider settings + provider-agnostic roadmap generation
 - [ ] M7: `tauri:build` installer smoke test, NSIS/MSI output verification
 
@@ -83,3 +91,8 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sy
 | 2026-11-09 | `cargo test` (M4) | 24/24 pass (5 new YouTube tests) |
 | 2026-11-09 | Live DB migration to 006 | verified: `006_youtube_sync`, youtube settings keys present, 0 snapshots (not yet connected) |
 | 2026-11-09 | Live DB migration to 005 | verified: notification table, CHARACTER_CREATOR fix |
+| 2026-11-09 | `cargo test` (M5) | 29/29 pass (5 new schtasks tests) |
+| 2026-11-09 | `python tests/verify_all_milestones.py` (M5) | 14/14 pass |
+| 2026-11-09 | `npm run typecheck` + `npm run build` (M5) | pass |
+| 2026-11-09 | Manual `schtasks` M5Test | create/query/delete `StoryQuestStudio\M5Test` OK |
+| 2026-11-09 | M4 live YouTube sync | verified: app DB connected, Fantasy HR, 2 videos, 217 views, 0 subs |
