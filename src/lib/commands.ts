@@ -24,7 +24,11 @@ import type {
   UpdateCampaignInput,
   UpdateEpisodeInput,
   UserProfile,
+  AiProviderConfig,
   CreateReminderInput,
+  GeneratedRoadmap,
+  StoryPlannerInput,
+  UpdateAiProviderInput,
   UpdateReminderInput,
   YoutubeClientCredentialsInput,
   YoutubeStatus,
@@ -124,4 +128,21 @@ export const api = {
     call<void>("cmd_delete_reminder", { reminderId }),
   snoozeReminder: (reminderId: string, minutes: number) =>
     call<ReminderConfig>("cmd_snooze_reminder", { reminderId, minutes }),
+  listAiProviders: () => call<AiProviderConfig[]>("cmd_list_ai_providers"),
+  setActiveAiProvider: (providerName: string) =>
+    call<void>("cmd_set_active_ai_provider", { providerName }),
+  updateAiProvider: (input: UpdateAiProviderInput) =>
+    call<void>("cmd_update_ai_provider", input),
+  testAiProvider: (providerName: string) =>
+    call<string>("cmd_test_ai_provider", { providerName }),
+  saveApiKey: (credentialKeyName: string, secretKey: string) =>
+    call<void>("cmd_save_api_key", { credentialKeyName, secretKey }),
+  hasApiKey: (credentialKeyName: string) =>
+    call<boolean>("cmd_has_api_key", { credentialKeyName }),
+  removeApiKey: (credentialKeyName: string) =>
+    call<void>("cmd_remove_api_key", { credentialKeyName }),
+  generateAiRoadmap: (input: StoryPlannerInput) =>
+    call<GeneratedRoadmap>("cmd_generate_ai_roadmap", input),
+  applyGeneratedRoadmap: (roadmap: GeneratedRoadmap) =>
+    call<number>("cmd_apply_generated_roadmap", { roadmap }),
 };

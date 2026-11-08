@@ -31,6 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "achievements", label: "Creator Achievements", shortLabel: "Achievements", icon: Award },
   { id: "assets", label: "Asset Workshop", shortLabel: "Assets", icon: Sparkles },
   { id: "calendar", label: "Calendar", shortLabel: "Calendar", icon: CalendarClock },
+  { id: "ai-planner", label: "AI Planner", shortLabel: "AI Planner", icon: Sparkles },
   { id: "settings", label: "Settings", shortLabel: "Settings", icon: Settings },
 ];
 

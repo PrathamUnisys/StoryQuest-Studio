@@ -16,10 +16,11 @@ use crate::gamification::{
     AchievementNotificationMode,
 };
 use crate::models::{
-    Achievement, ActivityDay, AchievementNotification, AppInfo, BootstrapState, Campaign,
-    CreatorProgress, CreatorRank, Episode, GeneratedRoadmap, ReminderConfig,
+    Achievement, ActivityDay, AchievementNotification, AiProviderConfig, AppInfo, BootstrapState,
+    Campaign, CreatorProgress, CreatorRank, Episode, GeneratedRoadmap, ReminderConfig,
     SetStreakPrefsInput, SettingItem, StoryPlannerInput, StreakRecord, Task, TaskCounts,
-    ThresholdUpdate, UserProfile, XpAwardResult, YoutubeStatus, AcknowledgeNotificationsInput,
+    ThresholdUpdate, UpdateAiProviderInput, UserProfile, XpAwardResult, YoutubeStatus,
+    AcknowledgeNotificationsInput,
 };
 use crate::project_fs::{initialize_campaign_directories, open_folder_in_explorer};
 use crate::scheduler::dispatch_windows_toast;
@@ -1163,9 +1164,258 @@ pub fn cmd_record_streak(state: State<'_, AppState>) -> Result<StreakRecord, Str
     Ok(record)
 }
 
+fn provider_config_from_row(row: &rusqlite::Row) -> Result<AiProviderConfig, rusqlite::Error> {
+    let credential_key_name: String = row.get(5)?;
+    let has_api_key = crate::credentials::retrieve_api_key(&credential_key_name)
+        .ok()
+        .flatten()
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false);
+    Ok(AiProviderConfig {
+        id: row.get(0)?,
+        provider_name: row.get(1)?,
+        display_name: row.get(2)?,
+        base_url: row.get(3)?,
+        default_model: row.get(4)?,
+        credential_key_name,
+        is_active: row.get::<_, i32>(6)? != 0,
+        temperature: row.get(7)?,
+        max_tokens: row.get(8)?,
+        has_api_key,
+    })
+}
+
+fn list_providers(conn: &Connection) -> Result<Vec<AiProviderConfig>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, provider_name, display_name, base_url, default_model, credential_key_name,
+                    is_active, temperature, max_tokens
+             FROM ai_provider_configs ORDER BY provider_name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], provider_config_from_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+fn active_provider(conn: &Connection) -> Result<Option<AiProviderConfig>, String> {
+    let mut providers = list_providers(conn)?;
+    Ok(providers.into_iter().find(|p| p.is_active))
+}
+
 #[tauri::command]
-pub fn cmd_generate_ai_roadmap(input: StoryPlannerInput) -> Result<GeneratedRoadmap, String> {
-    Ok(build_progressive_production_roadmap(&input))
+pub fn cmd_list_ai_providers(state: State<'_, AppState>) -> Result<Vec<AiProviderConfig>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    list_providers(&conn)
+}
+
+#[tauri::command]
+pub fn cmd_set_active_ai_provider(
+    state: State<'_, AppState>,
+    provider_name: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let known: Option<String> = conn
+        .query_row(
+            "SELECT provider_name FROM ai_provider_configs WHERE provider_name = ?1",
+            params![provider_name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if known.is_none() {
+        return Err(format!("Unknown AI provider: {provider_name}"));
+    }
+    conn.execute("UPDATE ai_provider_configs SET is_active = 0", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE ai_provider_configs SET is_active = 1, updated_at = datetime('now') WHERE provider_name = ?1",
+        params![provider_name],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cmd_update_ai_provider(
+    state: State<'_, AppState>,
+    input: UpdateAiProviderInput,
+) -> Result<(), String> {
+    if input.base_url.trim().is_empty() {
+        return Err("Base URL is required".to_string());
+    }
+    if input.default_model.trim().is_empty() {
+        return Err("Model is required".to_string());
+    }
+    if !(0.0..=2.0).contains(&input.temperature) {
+        return Err("Temperature must be 0.0-2.0".to_string());
+    }
+    if !(1..=128000).contains(&input.max_tokens) {
+        return Err("Max tokens must be 1-128000".to_string());
+    }
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let updated = conn
+        .execute(
+            "UPDATE ai_provider_configs SET base_url = ?1, default_model = ?2, temperature = ?3,
+                    max_tokens = ?4, updated_at = datetime('now')
+             WHERE provider_name = ?5",
+            params![
+                input.base_url.trim(),
+                input.default_model.trim(),
+                input.temperature,
+                input.max_tokens,
+                input.provider_name,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    if updated == 0 {
+        return Err(format!("Unknown AI provider: {}", input.provider_name));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_test_ai_provider(
+    state: State<'_, AppState>,
+    provider_name: String,
+) -> Result<String, String> {
+    let cfg = {
+        let conn = state.db.lock().map_err(|e| e.to_string())?;
+        let providers = list_providers(&conn)?;
+        providers
+            .into_iter()
+            .find(|p| p.provider_name == provider_name)
+            .ok_or_else(|| format!("Unknown AI provider: {provider_name}"))?
+    };
+    let probe = StoryPlannerInput {
+        campaign_id: String::new(),
+        episode_id: String::new(),
+        story_title: "connection test".to_string(),
+        short_premise: "ping".to_string(),
+        genre: None,
+        desired_runtime_mins: 1,
+        creative_instructions: None,
+        target_stage_limit: Some(1),
+    };
+    match crate::ai_planner::generate_roadmap(&probe, Some(&cfg)).await {
+        roadmap if roadmap.source == "ai" => {
+            Ok(format!("{} ({}) reachable — JSON roadmap returned", cfg.display_name, cfg.default_model))
+        }
+        _ => Err(format!(
+            "{} ({}) did not return a valid roadmap — check base URL, model, and API key",
+            cfg.display_name, cfg.default_model
+        )),
+    }
+}
+
+#[tauri::command]
+pub async fn cmd_generate_ai_roadmap(
+    state: State<'_, AppState>,
+    input: StoryPlannerInput,
+) -> Result<GeneratedRoadmap, String> {
+    if input.story_title.trim().is_empty() || input.short_premise.trim().is_empty() {
+        return Err("Story title and premise are required".to_string());
+    }
+    if input.desired_runtime_mins <= 0 {
+        return Err("Desired runtime must be positive".to_string());
+    }
+    let provider = {
+        let conn = state.db.lock().map_err(|e| e.to_string())?;
+        active_provider(&conn)?
+    };
+    Ok(crate::ai_planner::generate_roadmap(&input, provider.as_ref()).await)
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyRoadmapInput {
+    pub roadmap: GeneratedRoadmap,
+}
+
+#[tauri::command]
+pub fn cmd_apply_generated_roadmap(
+    state: State<'_, AppState>,
+    input: ApplyRoadmapInput,
+) -> Result<i32, String> {
+    if input.roadmap.generated_tasks.is_empty() {
+        return Err("Roadmap contains no tasks".to_string());
+    }
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let episode_id = input
+        .roadmap
+        .generated_tasks
+        .first()
+        .map(|t| t.episode_id.clone())
+        .unwrap_or_default();
+    let existing: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tasks WHERE episode_id = ?1",
+            params![episode_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if existing > 0 {
+        return Err(format!(
+            "Episode {episode_id} already has {existing} tasks — delete them before applying a new roadmap"
+        ));
+    }
+    let mut count = 0;
+    for task in &input.roadmap.generated_tasks {
+        conn.execute(
+            "INSERT INTO tasks (id, campaign_id, episode_id, stage_number, stage_name, title, description,
+                    objective, required_input, ai_instructions, human_responsibilities, required_software,
+                    expected_output, estimated_effort_mins, actual_effort_mins, definition_of_done,
+                    completion_requirement_type, completion_artifact_value, difficulty, xp_reward,
+                    skill_category, status, is_daily_quest)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+            params![
+                task.id,
+                task.campaign_id,
+                task.episode_id,
+                task.stage_number,
+                task.stage_name,
+                task.title,
+                task.description,
+                task.objective,
+                task.required_input,
+                task.ai_instructions,
+                task.human_responsibilities,
+                task.required_software,
+                task.expected_output,
+                task.estimated_effort_mins,
+                task.actual_effort_mins,
+                task.definition_of_done,
+                task.completion_requirement_type,
+                task.completion_artifact_value,
+                task.difficulty,
+                task.xp_reward,
+                task.skill_category,
+                task.status,
+                if task.is_daily_quest { 1 } else { 0 },
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        for dep in &task.dependencies {
+            conn.execute(
+                "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_task_id) VALUES (?1, ?2)",
+                params![task.id, dep],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        count += 1;
+    }
+    conn.execute(
+        "UPDATE episodes SET premise = ?1, narrative_structure = ?2, roadmap_approved = 0, updated_at = datetime('now')
+         WHERE id = ?3",
+        params![
+            input.roadmap.improved_premise,
+            input.roadmap.narrative_structure,
+            episode_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(count)
 }
 
 #[tauri::command]

@@ -13,6 +13,7 @@ import { screenTitle } from "./lib/navigation";
 import { useStoryQuestStore } from "./store/useStoryQuestStore";
 import type { ScreenId } from "./types/storyquest";
 import { AchievementsScreen } from "./screens/achievements-screen";
+import { AiPlannerScreen } from "./screens/ai-planner-screen";
 import { AssetsScreen } from "./screens/assets-screen";
 import { CalendarScreen } from "./screens/calendar-screen";
 import { CampaignsScreen } from "./screens/campaigns-screen";
@@ -33,6 +34,7 @@ const SCREEN_IDS: ScreenId[] = [
   "achievements",
   "assets",
   "calendar",
+  "ai-planner",
   "settings",
 ];
 
@@ -56,6 +58,8 @@ function renderScreen(screen: ScreenId) {
       return <AssetsScreen />;
     case "calendar":
       return <CalendarScreen />;
+    case "ai-planner":
+      return <AiPlannerScreen />;
     case "settings":
       return <SettingsScreen />;
     default:

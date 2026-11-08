@@ -8,6 +8,7 @@ export type ScreenId =
   | "achievements"
   | "assets"
   | "calendar"
+  | "ai-planner"
   | "settings";
 
 export interface UserProfile {
@@ -236,6 +237,46 @@ export interface CreateReminderInput {
 export interface UpdateReminderInput extends CreateReminderInput {
   id: string;
   enabled: boolean;
+}
+
+export interface StoryPlannerInput {
+  campaignId: string;
+  episodeId: string;
+  storyTitle: string;
+  shortPremise: string;
+  genre: string | null;
+  desiredRuntimeMins: number;
+  creativeInstructions: string | null;
+  targetStageLimit: number | null;
+}
+
+export interface GeneratedRoadmap {
+  storyAnalysis: string;
+  improvedPremise: string;
+  narrativeStructure: string;
+  generatedTasks: QuestTask[];
+  source: string;
+}
+
+export interface AiProviderConfig {
+  id: string;
+  providerName: string;
+  displayName: string;
+  baseUrl: string;
+  defaultModel: string;
+  credentialKeyName: string;
+  isActive: boolean;
+  temperature: number;
+  maxTokens: number;
+  hasApiKey: boolean;
+}
+
+export interface UpdateAiProviderInput {
+  providerName: string;
+  baseUrl: string;
+  defaultModel: string;
+  temperature: number;
+  maxTokens: number;
 }
 
 export interface ReminderConfig {

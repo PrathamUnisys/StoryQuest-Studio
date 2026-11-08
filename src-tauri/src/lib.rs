@@ -273,6 +273,11 @@ pub fn run() {
             cmd_set_reminder_enabled,
             cmd_delete_reminder,
             cmd_snooze_reminder,
+            cmd_list_ai_providers,
+            cmd_set_active_ai_provider,
+            cmd_update_ai_provider,
+            cmd_test_ai_provider,
+            cmd_apply_generated_roadmap,
         ])
         .run(tauri::generate_context!())
         .expect("error while running StoryQuest Studio Tauri application");

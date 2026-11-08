@@ -165,6 +165,32 @@ pub struct GeneratedRoadmap {
     pub improved_premise: String,
     pub narrative_structure: String,
     pub generated_tasks: Vec<Task>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiProviderConfig {
+    pub id: String,
+    pub provider_name: String,
+    pub display_name: String,
+    pub base_url: String,
+    pub default_model: String,
+    pub credential_key_name: String,
+    pub is_active: bool,
+    pub temperature: f64,
+    pub max_tokens: i32,
+    pub has_api_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAiProviderInput {
+    pub provider_name: String,
+    pub base_url: String,
+    pub default_model: String,
+    pub temperature: f64,
+    pub max_tokens: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

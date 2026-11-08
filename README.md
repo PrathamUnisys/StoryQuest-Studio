@@ -8,7 +8,7 @@ Designed for solo animators and independent YouTube creators, it tracks creator 
 
 ---
 
-## Status — M5 complete (accepted: M3, M4 live)
+## Status — M6 complete (accepted: M3, M4 live)
 
 | Area | State |
 | :--- | :--- |
@@ -19,8 +19,8 @@ Designed for solo animators and independent YouTube creators, it tracks creator 
 | Achievement auto-unlock + notifications + streaks | Implemented (M3) |
 | YouTube OAuth (PKCE + loopback) + Data/Analytics sync | Implemented + live-verified (M4) |
 | Reminder CRUD + Windows Task Scheduler + quiet hours | Implemented (M5) |
-| AI production planner | **M6** — deterministic template only |
-| Packaging / installer smoke test | **M7** — not yet |
+| AI provider settings + roadmap generation (OpenAI / Anthropic / compatible / Ollama) | Implemented (M6) |
+| Packaging / installer smoke test | **M7** — not yet (see Later in `TASK.md`) |
 
 See `TASK.md` for the current working state and `docs/MILESTONE_ACCEPTANCE_REPORT.md` for the honest report.
 
@@ -185,7 +185,7 @@ Produces NSIS `.exe` and WiX `.msi` under `src-tauri/target/release/bundle/`.
 
 ## Known limitations (honest)
 
-1. **AI planner is a deterministic offline template.** No provider API calls are made yet (M6).
+1. **AI roadmap needs a provider key for AI output** (AI Planner screen → save key → make active → test). Without one, the offline template is used and labeled as such — never presented as AI.
 2. **Notifications do not fire while the PC is powered off** (S4/S5); missed reminders are recovered into a single summary on next boot.
 3. **YouTube OAuth app is in Testing mode** until published in Google Cloud Console; test users only, refresh tokens expire after 7 days in Testing.
 4. **`npm audit` reports vulnerabilities** — determine production impact before upgrading.
@@ -194,4 +194,4 @@ Produces NSIS `.exe` and WiX `.msi` under `src-tauri/target/release/bundle/`.
 
 ## Roadmap
 
-M6 AI Production Planner → M7 Packaging & Release. See `TASK.md` for the current working state.
+M7 Packaging & Release (installer smoke test) → deferred backlog (live acceptances, OAuth publish, audit/warnings, MCP execution). See `TASK.md` → "Later (deferred)" for the full list.
