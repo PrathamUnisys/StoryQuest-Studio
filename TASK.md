@@ -82,10 +82,10 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sy
 - [x] M4 live YouTube sync — 2026-11-09: connected `createcreate313@gmail.com`, channel "Fantasy HR" (`UCXaZOMvGe_9So3su9yes04g`), 2 videos, 217 views, 0 subs; 28d analytics: 3 views, 0 watch min. Verified in app DB `%LOCALAPPDATA%\com.storyquest.studio\storyquest.db` (GUI app data dir; project `StoryQuestProjects/` DB is migrate-only and stays `not_connected`).
 
 ## Next
-- [ ] M5 + M6 live acceptance, then M7 (installer smoke test)
+- [ ] M5 + M6 live acceptance in `tauri dev` (M7 installer build skipped 2026-11-09 — see Later)
 
 ## Later (deferred — documented 2026-11-09)
-- [ ] **M7 — Packaging & release**: `npm run tauri:build` (NSIS `.exe` + WiX `.msi` under `src-tauri/target/release/bundle/`), install on clean Windows, smoke-test: first launch, DB migration to 006, YouTube connect, reminder fires while closed, AI Planner template path. Verify `scripts/build-windows.ps1` still matches.
+- [ ] **M7 — Packaging & release**: **SKIPPED by user 2026-11-09** (not needed for functionality; M5/M6 validate in `tauri dev`). `npm run tauri:build` (NSIS `.exe` + WiX `.msi` under `src-tauri/target/release/bundle/`), install on clean Windows, smoke-test: first launch, DB migration to 006, YouTube connect, reminder fires while closed, AI Planner template path. `scripts/build-windows.ps1` still matches. Checkpoint: tag `pre-m7-2026-11-09`, DB backups `StoryQuestProjects/Backups/*.20261109-113916.bak`.
 - [ ] **Live acceptance (needs user in app)**: M5 — create a Calendar reminder, confirm with `schtasks /Query /TN "StoryQuestStudio\…"`, fire test toast (outside quiet hours). M6 — paste a provider key in AI Planner, Test connection, Generate + Apply a roadmap to a task-less episode, confirm tasks in Quest Map.
 - [ ] **YouTube OAuth production**: Google Cloud Console → OAuth consent screen → **Publish app** (leaves Testing; refresh tokens stop expiring after 7 days; unverified-app warning remains for sensitive scopes until Google verification).
 - [ ] **Polish / backlog**: `npm audit` vulnerabilities review; silence Rust warnings (unused `streak_freezes_available`, `current_streak`, `mode`, `mut get`, dead `condition_value`); `python` milestone script could assert M4/M5 tables; MCP agent execution (`mcp_integration.rs` is export-only) and asset library remain post-M7.
@@ -109,3 +109,5 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sy
 | 2026-11-09 | `cargo test` (M6) | 33/33 pass (4 new AI planner tests) |
 | 2026-11-09 | `python tests/verify_all_milestones.py` (M6) | 14/14 pass |
 | 2026-11-09 | `npm run typecheck` + `npm run build` (M6) | pass |
+| 2026-11-09 | M7 checkpoint + pre-flight | tag `pre-m7-2026-11-09`; 2x DB backups 327KB; python 14/14, typecheck/build pass, cargo 33/33 (7 warnings deferred) |
+| 2026-11-09 | M7 bundler prereqs | WiX v3 + NSIS missing; MSVC BuildTools present; build skipped by user decision |
