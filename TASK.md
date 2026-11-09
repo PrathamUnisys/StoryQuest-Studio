@@ -111,3 +111,4 @@ Live database `StoryQuestProjects/storyquest.db` is at migration `006_youtube_sy
 | 2026-11-09 | `npm run typecheck` + `npm run build` (M6) | pass |
 | 2026-11-09 | M7 checkpoint + pre-flight | tag `pre-m7-2026-11-09`; 2x DB backups 327KB; python 14/14, typecheck/build pass, cargo 33/33 (7 warnings deferred) |
 | 2026-11-09 | M7 bundler prereqs | WiX v3 + NSIS missing; MSVC BuildTools present; build skipped by user decision |
+| 2026-11-09 | Fix `input` arg wrapping (16 commands) | `src/lib/commands.ts`: `call(cmd, input)` → `call(cmd, {input})` (+ ApplyRoadmap `{input:{roadmap}}`); typecheck/build pass, cargo 33/33 |

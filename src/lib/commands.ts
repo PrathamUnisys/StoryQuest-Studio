@@ -91,27 +91,27 @@ export const api = {
       xpReward,
     }),
   createCampaign: (input: CreateCampaignInput) =>
-    call<Campaign>("cmd_create_campaign", input),
+    call<Campaign>("cmd_create_campaign", { input }),
   updateCampaign: (input: UpdateCampaignInput) =>
-    call<Campaign>("cmd_update_campaign", input),
+    call<Campaign>("cmd_update_campaign", { input }),
   archiveCampaign: (input: ArchiveCampaignInput) =>
-    call<Campaign>("cmd_archive_campaign", input),
+    call<Campaign>("cmd_archive_campaign", { input }),
   createEpisode: (input: CreateEpisodeInput) =>
-    call<Episode>("cmd_create_episode", input),
+    call<Episode>("cmd_create_episode", { input }),
   updateEpisode: (input: UpdateEpisodeInput) =>
-    call<Episode>("cmd_update_episode", input),
+    call<Episode>("cmd_update_episode", { input }),
   setTaskStatus: (input: SetTaskStatusInput) =>
-    call<QuestTask>("cmd_set_task_status", input),
+    call<QuestTask>("cmd_set_task_status", { input }),
   reopenTask: (input: ReopenTaskInput) =>
-    call<QuestTask>("cmd_reopen_task", input),
+    call<QuestTask>("cmd_reopen_task", { input }),
   getAchievementNotifications: () =>
     call<AchievementNotification[]>("cmd_get_achievement_notifications"),
   acknowledgeAchievementNotification: (input: AcknowledgeNotificationsInput) =>
-    call<boolean>("cmd_acknowledge_achievement_notification", input),
+    call<boolean>("cmd_acknowledge_achievement_notification", { input }),
   setStreakPrefs: (input: SetStreakPrefsInput) =>
-    call<StreakRecord>("cmd_set_streak_prefs", input),
+    call<StreakRecord>("cmd_set_streak_prefs", { input }),
   youtubeSetClientCredentials: (input: YoutubeClientCredentialsInput) =>
-    call<void>("cmd_youtube_set_client_credentials", input),
+    call<void>("cmd_youtube_set_client_credentials", { input }),
   youtubeHasClientCredentials: () =>
     call<boolean>("cmd_youtube_has_client_credentials"),
   youtubeConnect: (loginHint?: string) =>
@@ -119,9 +119,9 @@ export const api = {
   youtubeSyncNow: () => call<YoutubeStatus>("cmd_youtube_sync_now"),
   youtubeDisconnect: () => call<YoutubeStatus>("cmd_youtube_disconnect"),
   createReminder: (input: CreateReminderInput) =>
-    call<ReminderConfig>("cmd_create_reminder", input),
+    call<ReminderConfig>("cmd_create_reminder", { input }),
   updateReminder: (input: UpdateReminderInput) =>
-    call<ReminderConfig>("cmd_update_reminder", input),
+    call<ReminderConfig>("cmd_update_reminder", { input }),
   setReminderEnabled: (reminderId: string, enabled: boolean) =>
     call<ReminderConfig>("cmd_set_reminder_enabled", { reminderId, enabled }),
   deleteReminder: (reminderId: string) =>
@@ -132,7 +132,7 @@ export const api = {
   setActiveAiProvider: (providerName: string) =>
     call<void>("cmd_set_active_ai_provider", { providerName }),
   updateAiProvider: (input: UpdateAiProviderInput) =>
-    call<void>("cmd_update_ai_provider", input),
+    call<void>("cmd_update_ai_provider", { input }),
   testAiProvider: (providerName: string) =>
     call<string>("cmd_test_ai_provider", { providerName }),
   saveApiKey: (credentialKeyName: string, secretKey: string) =>
@@ -142,7 +142,7 @@ export const api = {
   removeApiKey: (credentialKeyName: string) =>
     call<void>("cmd_remove_api_key", { credentialKeyName }),
   generateAiRoadmap: (input: StoryPlannerInput) =>
-    call<GeneratedRoadmap>("cmd_generate_ai_roadmap", input),
+    call<GeneratedRoadmap>("cmd_generate_ai_roadmap", { input }),
   applyGeneratedRoadmap: (roadmap: GeneratedRoadmap) =>
-    call<number>("cmd_apply_generated_roadmap", { roadmap }),
+    call<number>("cmd_apply_generated_roadmap", { input: { roadmap } }),
 };
