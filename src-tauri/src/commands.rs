@@ -2305,25 +2305,39 @@ pub fn cmd_set_streak_prefs(
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-    conn.execute(
-        "INSERT INTO streak_records (id, user_id, current_streak, best_streak,
-                 streak_freezes_available, weekly_rest_day, vacation_mode, vacation_until,
-                 last_productive_date, history_json, updated_at)
-         VALUES ('streak_user_solo_01', ?1, 0, 0, 2, ?2, ?3, ?4, NULL, '[]', ?5)
-         ON CONFLICT(user_id) DO UPDATE SET
-             weekly_rest_day = ?2,
-             vacation_mode = ?3,
-             vacation_until = ?4,
-             updated_at = ?5",
-        params![
-            DEFAULT_USER_ID,
-            input.weekly_rest_day,
-            if input.vacation_mode { 1 } else { 0 },
-            input.vacation_until,
-            now
-        ],
-    )
-    .map_err(|e| format!("Failed to save streak preferences: {e}"))?;
+    let updated = conn
+        .execute(
+            "UPDATE streak_records SET
+                 weekly_rest_day = ?1,
+                 vacation_mode = ?2,
+                 vacation_until = ?3,
+                 updated_at = ?4
+             WHERE user_id = ?5",
+            params![
+                input.weekly_rest_day,
+                if input.vacation_mode { 1 } else { 0 },
+                input.vacation_until,
+                now,
+                DEFAULT_USER_ID
+            ],
+        )
+        .map_err(|e| format!("Failed to save streak preferences: {e}"))?;
+    if updated == 0 {
+        conn.execute(
+            "INSERT INTO streak_records (id, user_id, current_streak, best_streak,
+                     streak_freezes_available, weekly_rest_day, vacation_mode, vacation_until,
+                     last_productive_date, history_json, updated_at)
+             VALUES ('streak_user_solo_01', ?1, 0, 0, 2, ?2, ?3, ?4, NULL, '[]', ?5)",
+            params![
+                DEFAULT_USER_ID,
+                input.weekly_rest_day,
+                if input.vacation_mode { 1 } else { 0 },
+                input.vacation_until,
+                now
+            ],
+        )
+        .map_err(|e| format!("Failed to save streak preferences: {e}"))?;
+    }
 
     query_streak(&conn, DEFAULT_USER_ID)
 }
