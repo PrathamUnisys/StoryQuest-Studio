@@ -431,7 +431,7 @@ export function SettingsScreen() {
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={vacationMode}
-                    onChange={() => setVacationMode(!vacationMode)}
+                    onClick={() => setVacationMode(!vacationMode)}
                     aria-label="Vacation mode"
                   />
                   <span className="text-sm text-slate-300">

@@ -171,6 +171,32 @@ pub(crate) fn query_episode(conn: &Connection, campaign_id: &str) -> Result<Opti
     .map_err(|e| format!("Failed to read episode: {e}"))
 }
 
+pub(crate) fn query_episode_by_id(conn: &Connection, episode_id: &str) -> Result<Option<Episode>, String> {
+    conn.query_row(
+        "SELECT id, campaign_id, episode_number, title, premise, narrative_structure,
+                target_duration_sec, current_stage, roadmap_approved, status, youtube_url
+         FROM episodes WHERE id = ?1",
+        params![episode_id],
+        |row| {
+            Ok(Episode {
+                id: row.get(0)?,
+                campaign_id: row.get(1)?,
+                episode_number: row.get(2)?,
+                title: row.get(3)?,
+                premise: row.get(4)?,
+                narrative_structure: row.get(5)?,
+                target_duration_sec: row.get(6)?,
+                current_stage: row.get(7)?,
+                roadmap_approved: row.get::<_, i32>(8)? != 0,
+                status: row.get(9)?,
+                youtube_url: row.get(10)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| format!("Failed to read episode: {e}"))
+}
+
 fn query_streak(conn: &Connection, user_id: &str) -> Result<StreakRecord, String> {
     conn.query_row(
         "SELECT id, user_id, current_streak, best_streak, streak_freezes_available,
@@ -2015,8 +2041,7 @@ pub fn cmd_create_episode(
     )
     .map_err(|e| format!("Failed to create episode: {e}"))?;
 
-    query_episode(&conn, &input.campaign_id)?
-        .and_then(|ep| if ep.id == id { Some(ep) } else { None })
+    query_episode_by_id(&conn, &id)?
         .ok_or_else(|| "Episode created but could not be read back.".to_string())
 }
 
@@ -2089,12 +2114,7 @@ pub fn cmd_update_episode(
         .map_err(|e| format!("Failed to update episode YouTube URL: {e}"))?;
     }
 
-    // query_episode takes campaign_id; fetch campaign_id first.
-    let campaign_id: String = conn
-        .query_row("SELECT campaign_id FROM episodes WHERE id = ?1", params![episode_id], |row| row.get(0))
-        .map_err(|e| format!("Failed to read episode campaign: {e}"))?;
-    query_episode(&conn, &campaign_id)?
-        .and_then(|ep| if ep.id == *episode_id { Some(ep) } else { None })
+    query_episode_by_id(&conn, episode_id)?
         .ok_or_else(|| "Episode not found.".to_string())
 }
 
